@@ -103,6 +103,8 @@ const typeFileMap = {
 const subjectList = document.getElementById('subjectList');
 const mainContent = document.getElementById('mainContent');
 let currentSubject = null;
+let quizStatus = [];
+let currentQuiz = null;
 
 Object.keys(subjectData).forEach(key => {
     const li = document.createElement('li');
@@ -402,28 +404,41 @@ function parseMksShort(md) {
 
 // 渲染题目（只渲染第idx题）
 function renderQuiz(quiz, idx) {
+    // 初始化状态
+    if (!window.quizStatus || window.quizStatus.length !== quiz.length) {
+        window.quizStatus = Array(quiz.length).fill(0);
+    }
+    window.currentQuiz = quiz;
     const q = quiz[idx];
     if(!q) { document.getElementById('quizArea').innerHTML = '<p>没有更多题目。</p>'; return; }
-    let html = `<div><b>第${idx+1}题：</b> ${q.title}</div><form id="quizForm">`;
-    q.options.forEach((opt, i) => {
-        const optVal = opt.match(/^([A-D])\./) ? opt[0] : String.fromCharCode(65+i);
-        html += `<div><label><input type="radio" name="opt" value="${optVal}"> ${opt}</label></div>`;
-    });
-    html += `<button type="submit">提交</button></form><div id="quizResult"></div>`;
-    // 上一题/下一题按钮
+    let html = `<div><b>第${idx+1}题：</b> ${q.title}</div><div id="quizOptions">`;
+    if(q.options && q.options.length > 0) {
+        q.options.forEach((opt, i) => {
+            const optVal = opt.match(/^([A-D])\./) ? opt[0] : String.fromCharCode(65+i);
+            html += `<div><label><input type="radio" name="opt" value="${optVal}"> ${opt}</label></div>`;
+        });
+    } else {
+        html += '<div style="color:red;">本题无选项，请检查题库格式！</div>';
+    }
+    html += `</div><button type="button" id="submitBtn">提交</button><div id="quizResult"></div>`;
     html += `<div style="margin-top:20px;">
         <button id="prevBtn" ${idx===0?'disabled':''}>上一题</button>
         <button id="nextBtn" ${idx===quiz.length-1?'disabled':''}>下一题</button>
     </div>`;
     document.getElementById('quizArea').innerHTML = html;
-    document.getElementById('quizForm').onsubmit = function(e) {
-        e.preventDefault();
+    document.getElementById('submitBtn').onclick = function() {
         const val = document.querySelector('input[name=opt]:checked');
         if(!val) { document.getElementById('quizResult').textContent = '请选择一个答案！'; return; }
         if(val.value === q.answer) {
+            window.quizStatus[idx] = 1;
             document.getElementById('quizResult').textContent = '回答正确！';
+            if(q.explanation) document.getElementById('quizResult').innerHTML += '<br><b>解析：</b>' + q.explanation;
+            if(q.img) document.getElementById('quizResult').innerHTML += `<br><img src="${q.img}" style="max-width:100%;margin-top:8px;">`;
         } else {
+            window.quizStatus[idx] = 2;
             document.getElementById('quizResult').textContent = '回答错误，正确答案是：' + q.answer;
+            if(q.explanation) document.getElementById('quizResult').innerHTML += '<br><b>解析：</b>' + q.explanation;
+            if(q.img) document.getElementById('quizResult').innerHTML += `<br><img src="${q.img}" style="max-width:100%;margin-top:8px;">`;
         }
     };
     document.getElementById('prevBtn').onclick = function() { renderQuiz(quiz, idx-1); };
@@ -572,18 +587,33 @@ function parseCShort(md) {
     });
 }
 
-// 概率统计选择题解析（图片题只显示题干）
+// 概率统计选择题解析（支持图片）
 function parseStatChoice(md) {
     const blocks = md.split(/###? ?\d+[:：.、]?/).slice(1);
     return blocks.map(block => {
         const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-        // 题干可能是图片或文字
         let title = lines[0];
+        let options = [];
         let answer = '';
+        let img = '';
+        // 选项
         for(let i=1;i<lines.length;i++){
-            if(lines[i].startsWith('答案：')) answer = lines[i].replace('答案：','').trim();
+            if (/^[\s\u200B\u3000-]*[A-D][.．、]?/.test(lines[i])) {
+                options.push(lines[i].replace(/^[\s\u200B\u3000-]*/, ''));
+            }
         }
-        return { title, options: [], answer };
+        // 答案
+        for(let i=1;i<lines.length;i++){
+            if(lines[i].startsWith('答案：') || lines[i].startsWith('答案:')) answer = lines[i].replace(/答案[:：]/,'').trim();
+        }
+        // 图片
+        for(let i=1;i<lines.length;i++){
+            if(lines[i].startsWith('![')) {
+                const match = lines[i].match(/\(([^)]+)\)/);
+                if(match) img = match[1];
+            }
+        }
+        return { title, options, answer, img };
     });
 }
 
@@ -653,22 +683,33 @@ function renderJudgeQuiz(quiz, idx) {
     };
 }
 
-// 数据结构单选题解析
+// 数据结构单选题解析（新版标准化格式）
 function parseDSChoice(md) {
-    // 兼容"### 1."、"### 1"、"# 1."、"# 1"分割
-    const blocks = md.split(/#+ ?\d+[.、]?/).slice(1);
+    // 以"#### 题号."分割
+    const blocks = md.split(/####\s*\d+\./).slice(1);
     return blocks.map(block => {
         const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-        // 题干为第一个非空行
-        let title = lines[0];
+        // 题干为第1行
+        const title = lines[0];
+        // 选项
         const options = [];
-        let answer = '';
-        for(let i=1;i<lines.length;i++){
-            if(/^A\./.test(lines[i]) || /^B\./.test(lines[i]) || /^C\./.test(lines[i]) || /^D\./.test(lines[i])) options.push(lines[i]);
-            if(lines[i].includes('正确答案：')) answer = lines[i].replace(/.*正确答案：/,'').replace(/\s|\n/g,'').trim();
-            if(lines[i].startsWith('答案：')) answer = lines[i].replace('答案：','').trim();
+        for(let i=1;i<lines.length;i++) {
+            if(/^A\./.test(lines[i]) || /^B\./.test(lines[i]) || /^C\./.test(lines[i]) || /^D\./.test(lines[i])) {
+                options.push(lines[i]);
+            }
         }
-        return { title, options, answer };
+        // 答案和解析
+        let answer = '';
+        let explanation = '';
+        for(let i=1;i<lines.length;i++) {
+            if(lines[i].startsWith('**答案：')) {
+                answer = lines[i].replace('**答案：','').replace('**','').trim();
+            }
+            if(lines[i].startsWith('**解析：')) {
+                explanation = lines[i].replace('**解析：','').replace('**','').trim();
+            }
+        }
+        return { title, options, answer, explanation };
     });
 }
 
