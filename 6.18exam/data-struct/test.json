@@ -1,0 +1,5 @@
+{
+    "result": "[{\"kc_bm\":\"04737\",\"xt_fs\":10,\"st_id\":71317448,\"id\":1637492,\"xt_day_sx\":2,\"tx_id\":23,\"st_tm\":\"给出以下程序的输出结果。<br/>＃include&nbsp;&lt;iostream&gt;<br/>using&nbsp;namespace&nbsp;std;<br/>void&nbsp;SV(int&nbsp;a,int&nbsp;b)<br/>{<br/>int&nbsp;temp;<br/>temp=a;<br/>a=b;<br/>b=temp;<br/>cout&lt;&lt;\\\"a=\\\"&lt;&lt;a&lt;&lt;\\\",b=\\\"&lt;&lt;b&lt;&lt;endl;<br/>return;<br/>}<br/>void&nbsp;SR(int&nbsp;&a,&nbsp;int&nbsp;&b)<br/>{<br/>int&nbsp;temp;<br/>temp=a;<br/>a=b;<br/>b=temp;<br/>out&lt;&lt;\\\"a=\\\"&lt;&lt;a&lt;&lt;\\\",b=\\\"&lt;&lt;b&lt;&lt;endl;<br/>return;<br/>}<br/>int&nbsp;main()<br/>{<br/>int&nbsp;a=2,b=4;<br/>cout&lt;&lt;\\\"a=\\\"&lt;&lt;a&lt;&lt;\\\",b=\\\"&lt;&lt;b&lt;&lt;endl;<br/>SV(a,b);<br/>cout&lt;&lt;\\\"a=\\\"&lt;a&lt;&lt;\\\",b=\\\"&lt;&lt;b&lt;&lt;endl;<br/>SR(a,b);<br/>cout&lt;&lt;\\\"a=\\\"&lt;&lt;a&lt;&lt;\\\",b=\\\"&lt;&lt;b&lt;&lt;endl;<br/>}\",\"xsxt_da\":\"a=4,b=2<div>a=4,b=2eqweqeqewqew</div>\"}]",
+    "success": true,
+    "message": "获取试题成功!"
+}

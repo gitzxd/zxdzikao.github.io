@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>题库系统</title>
+    <style>
+        body { font-family: '微软雅黑', Arial, sans-serif; margin: 0; padding: 0; background: #f5f6fa; }
+        .container { display: flex; height: 100vh; min-height: 100vh; }
+        .sidebar { width: 220px; background: #273c75; color: #fff; padding: 20px 0; box-shadow: 2px 0 8px #eee; transition: left 0.3s; z-index: 10; }
+        .sidebar h2 { text-align: center; font-size: 22px; margin-bottom: 30px; }
+        .subject-list { list-style: none; padding: 0; margin: 0; }
+        .subject-list li { padding: 14px 30px; cursor: pointer; transition: background 0.2s; font-size: 18px; }
+        .subject-list li:hover, .subject-list li.active { background: #40739e; }
+        .main { flex: 1; padding: 40px; min-width: 0; }
+        .main h2 { font-size: 24px; margin-bottom: 20px; }
+        .type-list { list-style: none; padding: 0; }
+        .type-list li { padding: 14px 20px; background: #fff; margin-bottom: 14px; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 8px #f0f0f0; transition: background 0.2s; font-size: 18px; }
+        .type-list li:hover { background: #dff9fb; }
+        .back-btn { margin-bottom: 20px; color: #40739e; cursor: pointer; display: inline-block; font-size: 18px; }
+        input[type="text"], input[type="number"], input[type="password"], input[type="search"], input[type="email"], textarea {
+            font-size: 18px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%; box-sizing: border-box; margin-bottom: 10px;
+        }
+        button { font-size: 18px; padding: 10px 24px; border-radius: 6px; border: none; background: #40739e; color: #fff; margin: 8px 8px 8px 0; cursor: pointer; transition: background 0.2s; }
+        button:active { background: #273c75; }
+        label { font-size: 18px; }
+        @media (max-width: 900px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; position: relative; box-shadow: none; }
+            .main { padding: 20px 8px; }
+        }
+        @media (max-width: 600px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100vw; height: auto; position: fixed; left: -100vw; top: 0; bottom: 0; background: #273c75; box-shadow: 2px 0 8px #eee; transition: left 0.3s; z-index: 100; }
+            .sidebar.open { left: 0; }
+            .sidebar h2 { font-size: 20px; }
+            .main { padding: 16px 4px; }
+            .type-list li, .subject-list li { font-size: 16px; padding: 12px 12px; }
+            .back-btn { font-size: 16px; }
+            button { font-size: 16px; padding: 8px 16px; }
+            input, textarea { font-size: 16px; }
+        }
+        .mobile-menu-btn {
+            display: none;
+            position: fixed;
+            left: 16px;
+            top: 16px;
+            z-index: 200;
+            background: #40739e;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            font-size: 28px;
+            box-shadow: 0 2px 8px #aaa;
+        }
+        @media (max-width: 600px) {
+            .mobile-menu-btn { display: block; }
+        }
+    </style>
+</head>
+<body>
+<button class="mobile-menu-btn" id="menuBtn">☰</button>
+<div class="container">
+    <div class="sidebar" id="sidebar">
+        <h2>考试科目</h2>
+        <ul class="subject-list" id="subjectList"></ul>
+    </div>
+    <div class="main" id="mainContent">
+        <h2>欢迎使用题库系统</h2>
+        <p>请选择左侧的考试科目进行练习。</p>
+    </div>
+</div>
+<script>
+// 科目与题型数据
+const subjectData = {
+    'cn_recent_history': ['选择题', '简答题', '论述题'],
+    'mks': ['选择题', '简答题', '论述题'],
+    'java': ['单选题', '填空题', '简答题', '程序填空题', '程序设计'],
+    'c语言': ['单选题', '填空题', '程序填空', '综合题', '程序设计'],
+    'statistics': ['选择题', '判断题', '填空题', '计算题'],
+    'data-struct': ['单选', '填空', '综合', '应用', '程序'],
+};
+const subjectNames = {
+    'cn_recent_history': '中国近现代史',
+    'mks': '马克思主义',
+    'java': 'Java',
+    'c语言': 'C语言',
+    'statistics': '概率统计',
+    'data-struct': '数据结构',
+};
+const typeFileMap = {
+    '中国近现代史': ['0.cn_h-选择题.md', '1.cn_h-简答题.md', '2.cn-h-论述题.md'],
+    '马克思主义': ['0.mks-选择题.md', '1.mks-简答题.md', '2.mks-论述题.md'],
+    'Java': ['1.java-单选题.md', '2.java-填空题.md', '3.java-简答题.md', '4.java-程序填空题.md', '5.java-程序设计.md'],
+    'C语言': ['0.c-单选题.md', '1.c-填空题.md', '2.c-程序填空.md', '3.c-综合题.md', '4.c-程序设计.md'],
+    '概率统计': ['1.st-选择题.md', '2.st-判断题.md', '3.st-填空题.md', '3.st-计算题.md'],
+    '数据结构': ['1.data-struct-单选.md', '2.data-struct-填空.md', '3.data-struct-综合.md', '4.data-struct-应用.md', '5.data-struct-程序.md'],
+};
+
+// 渲染科目列表
+const subjectList = document.getElementById('subjectList');
+const mainContent = document.getElementById('mainContent');
+let currentSubject = null;
+
+Object.keys(subjectData).forEach(key => {
+    const li = document.createElement('li');
+    li.textContent = subjectNames[key] || key;
+    li.onclick = () => selectSubject(key);
+    subjectList.appendChild(li);
+});
+
+// 移动端菜单按钮逻辑
+const menuBtn = document.getElementById('menuBtn');
+const sidebar = document.getElementById('sidebar');
+menuBtn.onclick = function() {
+    sidebar.classList.toggle('open');
+};
+
+function selectSubject(subjectKey) {
+    currentSubject = subjectKey;
+    Array.from(subjectList.children).forEach(li => {
+        li.classList.toggle('active', li.textContent === (subjectNames[subjectKey] || subjectKey));
+    });
+    // 移动端自动收起菜单
+    if(window.innerWidth <= 600) sidebar.classList.remove('open');
+    // 显示题型
+    const types = subjectData[subjectKey];
+    let html = `<span class="back-btn" onclick="backToHome()">← 返回</span>`;
+    html += `<h2>${subjectNames[subjectKey] || subjectKey} - 题型选择</h2><ul class="type-list">`;
+    types.forEach((type, idx) => {
+        html += `<li onclick="selectType('${subjectKey}', ${idx})">${type}</li>`;
+    });
+    html += '</ul>';
+    mainContent.innerHTML = html;
+}
+
+function backToHome() {
+    Array.from(subjectList.children).forEach(li => li.classList.remove('active'));
+    mainContent.innerHTML = `<h2>欢迎使用题库系统</h2><p>请选择左侧的考试科目进行练习。</p>`;
+}
+
+function selectType(subjectKey, typeIdx) {
+    const subject = subjectNames[subjectKey] || subjectKey;
+    const type = subjectData[subjectKey][typeIdx];
+    mainContent.innerHTML = `<span class="back-btn" onclick="selectSubject('${subjectKey}')">← 返回</span><h2>${subject} - ${type}</h2><div id="quizArea"><p>题目加载中...</p></div>`;
+    // 马克思主义-选择题
+    if(subject === '马克思主义' && type === '选择题') {
+        fetch('mks/0.mks-选择题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseMksChoice(md);
+                renderQuiz(quiz, 0);
+            });
+    }
+    // 马克思主义-简答题
+    else if(subject === '马克思主义' && type === '简答题') {
+        fetch('mks/1.mks-简答题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseMksShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // 马克思主义-论述题
+    else if(subject === '马克思主义' && type === '论述题') {
+        fetch('mks/2.mks-论述题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseMksShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // 中国近现代史-选择题
+    else if(subject === '中国近现代史' && type === '选择题') {
+        fetch('cn_recent_history/0.cn_h-选择题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseMksChoice(md);
+                renderQuiz(quiz, 0);
+            });
+    }
+    // 中国近现代史-简答题
+    else if(subject === '中国近现代史' && type === '简答题') {
+        fetch('cn_recent_history/1.cn_h-简答题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseMksShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // 中国近现代史-论述题
+    else if(subject === '中国近现代史' && type === '论述题') {
+        fetch('cn_recent_history/2.cn-h-论述题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseMksShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // Java-单选题
+    else if(subject === 'Java' && type === '单选题') {
+        fetch('java/1.java-单选题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseMksChoice(md);
+                renderQuiz(quiz, 0);
+            });
+    }
+    // Java-填空题
+    else if(subject === 'Java' && type === '填空题') {
+        fetch('java/2.java-填空题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseJavaFill(md);
+                renderFillQuiz(quiz, 0);
+            });
+    }
+    // Java-简答题
+    else if(subject === 'Java' && type === '简答题') {
+        fetch('java/3.java-简答题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseJavaShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // Java-程序填空题
+    else if(subject === 'Java' && type === '程序填空题') {
+        fetch('java/4.java-程序填空题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseJavaShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // Java-程序设计
+    else if(subject === 'Java' && type === '程序设计') {
+        fetch('java/5.java-程序设计.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseJavaShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // C语言-单选题
+    if(subject === 'C语言' && type === '单选题') {
+        fetch('c语言/0.c-单选题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseCChoice(md);
+                renderQuiz(quiz, 0);
+            });
+    }
+    // C语言-填空题
+    else if(subject === 'C语言' && type === '填空题') {
+        fetch('c语言/1.c-填空题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseCFill(md);
+                renderFillQuiz(quiz, 0);
+            });
+    }
+    // C语言-程序填空
+    else if(subject === 'C语言' && type === '程序填空') {
+        fetch('c语言/2.c-程序填空.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseCShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // C语言-综合题
+    else if(subject === 'C语言' && type === '综合题') {
+        fetch('c语言/3.c-综合题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseCShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // C语言-程序设计
+    else if(subject === 'C语言' && type === '程序设计') {
+        fetch('c语言/4.c-程序设计.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseCShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // 概率统计-选择题
+    if(subject === '概率统计' && type === '选择题') {
+        fetch('statistics/1.st-选择题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseStatChoice(md);
+                renderQuiz(quiz, 0);
+            });
+    }
+    // 概率统计-判断题
+    else if(subject === '概率统计' && type === '判断题') {
+        fetch('statistics/2.st-判断题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseStatJudge(md);
+                renderJudgeQuiz(quiz, 0);
+            });
+    }
+    // 概率统计-填空题
+    else if(subject === '概率统计' && type === '填空题') {
+        fetch('statistics/3.st-填空题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseStatFill(md);
+                renderFillQuiz(quiz, 0);
+            });
+    }
+    // 概率统计-计算题
+    else if(subject === '概率统计' && type === '计算题') {
+        fetch('statistics/3.st-计算题.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseStatShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // 数据结构-单选
+    if(subject === '数据结构' && type === '单选') {
+        fetch('data-struct/1.data-struct-单选.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseDSChoice(md);
+                renderQuiz(quiz, 0);
+            });
+    }
+    // 数据结构-填空
+    else if(subject === '数据结构' && type === '填空') {
+        fetch('data-struct/2.data-struct-填空.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseDSFill(md);
+                renderFillQuiz(quiz, 0);
+            });
+    }
+    // 数据结构-综合
+    else if(subject === '数据结构' && type === '综合') {
+        fetch('data-struct/3.data-struct-综合.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseDSShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // 数据结构-应用
+    else if(subject === '数据结构' && type === '应用') {
+        fetch('data-struct/4.data-struct-应用.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseDSShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+    // 数据结构-程序
+    else if(subject === '数据结构' && type === '程序') {
+        fetch('data-struct/5.data-struct-程序.md')
+            .then(res => res.text())
+            .then(md => {
+                const quiz = parseDSShort(md);
+                renderShortQuiz(quiz, 0);
+            });
+    }
+}
+
+// 解析markdown选择题（只取前一道题）
+function parseMksChoice(md) {
+    const blocks = md.split(/## \d+\./).slice(1); // 每道题
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim());
+        const title = lines[0].replace(/【.*】。?/, '').trim();
+        const options = [];
+        let answer = '';
+        lines.forEach(line => {
+            if(line.startsWith('- ')) options.push(line.replace(/^-\s*/, ''));
+            if(line.startsWith('答案：')) answer = line.replace('答案：', '').trim();
+        });
+        return { title, options, answer };
+    });
+}
+
+// 解析简答题/论述题（题干+参考答案）
+function parseMksShort(md) {
+    const blocks = md.split(/## ?\d+[:.]/).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0];
+        // 只取(1)(2)...开头的行为答案
+        const answer = lines.slice(1).filter(l => /^\(\d+\)/.test(l)).join('<br>');
+        return { title, answer };
+    });
+}
+
+// 渲染题目（只渲染第idx题）
+function renderQuiz(quiz, idx) {
+    const q = quiz[idx];
+    if(!q) { document.getElementById('quizArea').innerHTML = '<p>没有更多题目。</p>'; return; }
+    let html = `<div><b>第${idx+1}题：</b> ${q.title}</div><form id="quizForm">`;
+    q.options.forEach((opt, i) => {
+        const optVal = opt.match(/^([A-D])\./) ? opt[0] : String.fromCharCode(65+i);
+        html += `<div><label><input type="radio" name="opt" value="${optVal}"> ${opt}</label></div>`;
+    });
+    html += `<button type="submit">提交</button></form><div id="quizResult"></div>`;
+    // 上一题/下一题按钮
+    html += `<div style="margin-top:20px;">
+        <button id="prevBtn" ${idx===0?'disabled':''}>上一题</button>
+        <button id="nextBtn" ${idx===quiz.length-1?'disabled':''}>下一题</button>
+    </div>`;
+    document.getElementById('quizArea').innerHTML = html;
+    document.getElementById('quizForm').onsubmit = function(e) {
+        e.preventDefault();
+        const val = document.querySelector('input[name=opt]:checked');
+        if(!val) { document.getElementById('quizResult').textContent = '请选择一个答案！'; return; }
+        if(val.value === q.answer) {
+            document.getElementById('quizResult').textContent = '回答正确！';
+        } else {
+            document.getElementById('quizResult').textContent = '回答错误，正确答案是：' + q.answer;
+        }
+    };
+    document.getElementById('prevBtn').onclick = function() { renderQuiz(quiz, idx-1); };
+    document.getElementById('nextBtn').onclick = function() { renderQuiz(quiz, idx+1); };
+}
+
+// 渲染简答题/论述题
+function renderShortQuiz(quiz, idx) {
+    const q = quiz[idx];
+    if(!q) { document.getElementById('quizArea').innerHTML = '<p>没有更多题目。</p>'; return; }
+    let html = `<div><b>第${idx+1}题：</b> ${q.title}</div>`;
+    html += `<textarea id="shortAns" rows="6" style="width:100%;margin:12px 0;"></textarea>`;
+    html += `<button onclick="checkShortAns()">显示参考答案</button>`;
+    html += `<div id="shortResult" style="margin:12px 0 0 0;"></div>`;
+    html += `<div style="margin-top:20px;">
+        <button id="prevBtn" ${idx===0?'disabled':''}>上一题</button>
+        <button id="nextBtn" ${idx===quiz.length-1?'disabled':''}>下一题</button>
+    </div>`;
+    document.getElementById('quizArea').innerHTML = html;
+    document.getElementById('prevBtn').onclick = function() { renderShortQuiz(quiz, idx-1); };
+    document.getElementById('nextBtn').onclick = function() { renderShortQuiz(quiz, idx+1); };
+    window.checkShortAns = function() {
+        document.getElementById('shortResult').innerHTML = `<b>参考答案：</b><br>${q.answer}`;
+    };
+}
+
+// Java填空题解析
+function parseJavaFill(md) {
+    const blocks = md.split(/## \d+\./).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0].replace(/【.*】。?/, '').replace(/\uff1a$/, '').trim();
+        let answer = '';
+        lines.forEach(line => {
+            if(line.startsWith('答案：')) answer = line.replace('答案：', '').trim();
+        });
+        return { title, answer };
+    });
+}
+
+// Java简答题/程序填空/程序设计题解析
+function parseJavaShort(md) {
+    // 以"1."、"2."、"3."等开头分割
+    const blocks = md.split(/\n\d+\./).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0];
+        // 答案行为"答案："开头，或代码块
+        let answer = '';
+        let ansLines = [];
+        let inCode = false;
+        for(let i=1;i<lines.length;i++){
+            if(lines[i].startsWith('答案：')) {
+                ansLines.push(lines[i].replace('答案：','').trim());
+            } else if(lines[i].startsWith('```')) {
+                inCode = !inCode;
+                ansLines.push(lines[i]);
+            } else if(inCode || lines[i]) {
+                ansLines.push(lines[i]);
+            }
+        }
+        answer = ansLines.join('<br>');
+        return { title, answer };
+    });
+}
+
+// Java填空题渲染
+function renderFillQuiz(quiz, idx) {
+    const q = quiz[idx];
+    if(!q) { document.getElementById('quizArea').innerHTML = '<p>没有更多题目。</p>'; return; }
+    let html = `<div><b>第${idx+1}题：</b> ${q.title}</div>`;
+    html += `<input id="fillAns" style="width:60%;margin:12px 0;">`;
+    html += `<button onclick="checkFillAns()">提交</button>`;
+    html += `<div id="fillResult" style="margin:12px 0 0 0;"></div>`;
+    html += `<div style="margin-top:20px;">
+        <button id="prevBtn" ${idx===0?'disabled':''}>上一题</button>
+        <button id="nextBtn" ${idx===quiz.length-1?'disabled':''}>下一题</button>
+    </div>`;
+    document.getElementById('quizArea').innerHTML = html;
+    document.getElementById('prevBtn').onclick = function() { renderFillQuiz(quiz, idx-1); };
+    document.getElementById('nextBtn').onclick = function() { renderFillQuiz(quiz, idx+1); };
+    window.checkFillAns = function() {
+        const val = document.getElementById('fillAns').value.trim();
+        if(val === q.answer) {
+            document.getElementById('fillResult').textContent = '回答正确！';
+        } else {
+            document.getElementById('fillResult').textContent = '回答错误，正确答案是：' + q.answer;
+        }
+    };
+}
+
+// C语言单选题解析
+function parseCChoice(md) {
+    // 兼容"### 1"或"## 1."等分割
+    const blocks = md.split(/###? ?\d+[.、]?/).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0].replace(/【.*】。?/, '').replace(/\uff1a$/, '').trim();
+        const options = [];
+        let answer = '';
+        lines.forEach(line => {
+            if(/^A\./.test(line) || /^B\./.test(line) || /^C\./.test(line) || /^D\./.test(line)) options.push(line);
+            if(line.startsWith('答案：')) answer = line.replace('答案：', '').trim();
+        });
+        return { title, options, answer };
+    });
+}
+
+// C语言填空题解析
+function parseCFill(md) {
+    const blocks = md.split(/## \d+\./).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0].replace(/【.*】。?/, '').replace(/\uff1a$/, '').trim();
+        let answer = '';
+        for(let i=1;i<lines.length;i++){
+            if(lines[i]) answer = lines[i];
+        }
+        return { title, answer };
+    });
+}
+
+// C语言综合题/程序填空/程序设计题解析
+function parseCShort(md) {
+    // 以"## 1."、"## 2."、"## 3."等分割
+    const blocks = md.split(/## \d+\./).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0];
+        // 答案为"答案："开头或代码块
+        let answer = '';
+        let ansLines = [];
+        let inCode = false;
+        for(let i=1;i<lines.length;i++){
+            if(lines[i].startsWith('答案：')) {
+                ansLines.push(lines[i].replace('答案：','').trim());
+            } else if(lines[i].startsWith('```')) {
+                inCode = !inCode;
+                ansLines.push(lines[i]);
+            } else if(inCode || lines[i]) {
+                ansLines.push(lines[i]);
+            }
+        }
+        answer = ansLines.join('<br>');
+        return { title, answer };
+    });
+}
+
+// 概率统计选择题解析（图片题只显示题干）
+function parseStatChoice(md) {
+    const blocks = md.split(/###? ?\d+[:：.、]?/).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        // 题干可能是图片或文字
+        let title = lines[0];
+        let answer = '';
+        for(let i=1;i<lines.length;i++){
+            if(lines[i].startsWith('答案：')) answer = lines[i].replace('答案：','').trim();
+        }
+        return { title, options: [], answer };
+    });
+}
+
+// 概率统计判断题解析
+function parseStatJudge(md) {
+    const blocks = md.split(/###? ?\d+/).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0];
+        let answer = '';
+        for(let i=1;i<lines.length;i++){
+            if(lines[i].startsWith('答案：')) answer = lines[i].replace('答案：','').trim();
+        }
+        return { title, answer };
+    });
+}
+
+// 概率统计填空题解析
+function parseStatFill(md) {
+    const blocks = md.split(/## ?\d+\./).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0];
+        let answer = '';
+        for(let i=1;i<lines.length;i++){
+            if(lines[i]) answer = lines[i];
+        }
+        return { title, answer };
+    });
+}
+
+// 概率统计计算题解析
+function parseStatShort(md) {
+    const blocks = md.split(/## ?\d+\./).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0];
+        let answer = lines.slice(1).join('<br>');
+        return { title, answer };
+    });
+}
+
+// 概率统计判断题渲染
+function renderJudgeQuiz(quiz, idx) {
+    const q = quiz[idx];
+    if(!q) { document.getElementById('quizArea').innerHTML = '<p>没有更多题目。</p>'; return; }
+    let html = `<div><b>第${idx+1}题：</b> ${q.title}</div>`;
+    html += `<label><input type="radio" name="judge" value="正确"> 正确</label> `;
+    html += `<label><input type="radio" name="judge" value="错误"> 错误</label> `;
+    html += `<button onclick="checkJudgeAns()">提交</button>`;
+    html += `<div id="judgeResult" style="margin:12px 0 0 0;"></div>`;
+    html += `<div style="margin-top:20px;">
+        <button id="prevBtn" ${idx===0?'disabled':''}>上一题</button>
+        <button id="nextBtn" ${idx===quiz.length-1?'disabled':''}>下一题</button>
+    </div>`;
+    document.getElementById('quizArea').innerHTML = html;
+    document.getElementById('prevBtn').onclick = function() { renderJudgeQuiz(quiz, idx-1); };
+    document.getElementById('nextBtn').onclick = function() { renderJudgeQuiz(quiz, idx+1); };
+    window.checkJudgeAns = function() {
+        const val = document.querySelector('input[name=judge]:checked');
+        if(!val) { document.getElementById('judgeResult').textContent = '请选择一个答案！'; return; }
+        if(val.value === q.answer) {
+            document.getElementById('judgeResult').textContent = '回答正确！';
+        } else {
+            document.getElementById('judgeResult').textContent = '回答错误，正确答案是：' + q.answer;
+        }
+    };
+}
+
+// 数据结构单选题解析
+function parseDSChoice(md) {
+    // 兼容"### 1."、"### 1"、"# 1."、"# 1"分割
+    const blocks = md.split(/#+ ?\d+[.、]?/).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        // 题干为第一个非空行
+        let title = lines[0];
+        const options = [];
+        let answer = '';
+        for(let i=1;i<lines.length;i++){
+            if(/^A\./.test(lines[i]) || /^B\./.test(lines[i]) || /^C\./.test(lines[i]) || /^D\./.test(lines[i])) options.push(lines[i]);
+            if(lines[i].includes('正确答案：')) answer = lines[i].replace(/.*正确答案：/,'').replace(/\s|\n/g,'').trim();
+            if(lines[i].startsWith('答案：')) answer = lines[i].replace('答案：','').trim();
+        }
+        return { title, options, answer };
+    });
+}
+
+// 数据结构填空题解析
+function parseDSFill(md) {
+    // 以"1."、"2."、"3."等分割
+    const blocks = md.split(/\n\d+\./).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0];
+        let answer = '';
+        for(let i=1;i<lines.length;i++){
+            if(lines[i].startsWith('(') && lines[i].endsWith(')')) answer = lines[i].replace(/[()]/g,'').trim();
+            else if(lines[i]) answer = lines[i];
+        }
+        return { title, answer };
+    });
+}
+
+// 数据结构综合/应用/程序题解析
+function parseDSShort(md) {
+    // 以"1."、"2."、"3."等分割
+    const blocks = md.split(/\n\d+\./).slice(1);
+    return blocks.map(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = lines[0];
+        // 答案为"答案："开头或代码块
+        let answer = '';
+        let ansLines = [];
+        let inCode = false;
+        for(let i=1;i<lines.length;i++){
+            if(lines[i].startsWith('答案：')) {
+                ansLines.push(lines[i].replace('答案：','').trim());
+            } else if(lines[i].startsWith('```')) {
+                inCode = !inCode;
+                ansLines.push(lines[i]);
+            } else if(inCode || lines[i]) {
+                ansLines.push(lines[i]);
+            }
+        }
+        answer = ansLines.join('<br>');
+        return { title, answer };
+    });
+}
+</script>
+</body>
+</html>
+
